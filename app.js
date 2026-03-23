@@ -25,15 +25,15 @@ const MOD_SLOT_FULL  = ['BARREL','SCOPE','GRIP','STOCK'];
 
 let activeFilter = 0;
 
-// Linear left-panel nav sequence
+// Left-panel nav sequence — column-aware rows
 const NAV_LEFT_SEQ = [
-  { type:'slot',  slotIdx: LS.WEAPON1 },
-  { type:'mods',  weaponIdx: 0 },
-  { type:'slot',  slotIdx: LS.WEAPON2 },
-  { type:'mods',  weaponIdx: 1 },
-  { type:'slot',  slotIdx: LS.EQUIP1 },
-  { type:'slot',  slotIdx: LS.SHIELD },
-  { type:'slot',  slotIdx: LS.IMPL1 },
+  { type: 'mods-row', weaponIdx: 0, row: 0 },                          // W1 top    (BAR / SCO)
+  { type: 'mods-row', weaponIdx: 0, row: 1 },                          // W1 bottom (GRI / STO)
+  { type: 'mods-row', weaponIdx: 1, row: 0 },                          // W2 top    (BAR / SCO)
+  { type: 'mods-row', weaponIdx: 1, row: 1 },                          // W2 bottom (GRI / STO)
+  { type: 'gear-row', slots: [LS.EQUIP1, LS.SHIELD] },                 // Equipment / Shield
+  { type: 'gear-row', slots: [LS.CORES,  LS.CORE2]  },                 // Core 1   / Core 2
+  { type: 'implants', slots: [LS.IMPL1, LS.IMPL2, LS.IMPL3] },        // Implants
 ];
 
 // ── SVG ICON SYSTEM ────────────────────────────────────
@@ -80,8 +80,16 @@ const ICON_PATHS = {
 
 // Raster image overrides — save PNGs to assets/icons/ with these names
 const RASTER_ICONS = {
-  weapon: 'assets/icons/item-weapon.png',
-  ammo:   'assets/icons/item-ammo.png',
+  weapon:     'assets/icons/item-weapon.png',
+  ammo:       'assets/icons/item-ammo.png',
+  core:       'assets/icons/item-core.png',
+  equip:      'assets/icons/item-equip.png',
+  shield:     'assets/icons/item-shield.png',
+  grenade:    'assets/icons/item-grenade.png',
+  consumable: 'assets/icons/item-grenade.png',
+  medkit:     'assets/icons/item-grenade.png',
+  implant:    'assets/icons/item-implant.png',
+  tactical:   'assets/icons/item-equip.png',
 };
 
 /**
@@ -90,8 +98,7 @@ const RASTER_ICONS = {
  */
 function renderIcon(type, size = 24) {
   if (RASTER_ICONS[type]) {
-    return `<img src="${RASTER_ICONS[type]}" alt="${type}"
-      onerror="this.style.display='none';this.insertAdjacentHTML('afterend',\`${svgFallback(type, size)}\`)" />`;
+    return `<img src="${RASTER_ICONS[type]}" alt="${type}" onerror="this.style.display='none'" />`;
   }
   return svgFallback(type, size);
 }
@@ -273,7 +280,7 @@ function buildCrateMap() {
   const vis = FILTER_SECS[FILTERS[activeFilter]];
   CRATE_ORDER.forEach(sec => {
     if (!vis.includes(sec)) return;
-    (crateData[sec] || []).forEach((_, si) => crateMap.push({ sec, si }));
+    (crateData[sec] || []).forEach((item, si) => { if (item !== null) crateMap.push({ sec, si }); });
   });
 }
 function getCrateFlat(gi) { const m = crateMap[gi]; if (!m) return null; return crateData[m.sec][m.si]; }
@@ -284,6 +291,7 @@ function setCrateFlat(gi, item) { const m = crateMap[gi]; if (!m) return; crateD
 let focusMode    = 'main';
 let focusPanel   = 'backpack', focusIdx = 0;
 let modFocusWeapon = 0, modFocusSlot = 0;
+let leftNavCol = 0; // column position within left-panel nav rows
 
 let panels    = { left:[], backpack:[], crate:[] };
 let modSlotEls = [[], []];
@@ -300,44 +308,55 @@ function renderLeft() {
   c.innerHTML = ''; panels.left = []; modSlotEls = [[], []];
 
   [LS.WEAPON1, LS.WEAPON2].forEach((wLs, wIdx) => {
-    const w    = leftItems[wLs];
-    const wrap = document.createElement('div'); wrap.className = 'wp-wrap';
+    const w       = leftItems[wLs];
+    const isActive = activeWeapon === wIdx;
+    const wrap    = document.createElement('div');
+    wrap.className = 'wp-wrap' + (isActive && w ? ' is-active' : '');
 
-    // Weapon card — unified item-slot style
-    const el = document.createElement('div');
-    el.className = `item-slot wp-slot${w ? ' ' + (w.rarity || 'common') : ' empty'}${activeWeapon === wIdx && w ? ' is-active' : ''}`;
-    if (w) {
-      el.innerHTML = makeItemCardHTML(w) + `<span class="wp-num">[${wIdx + 1}]</span>`;
-      el.addEventListener('click',      () => { setMainFocus('left', wLs); handleCrossAction('left', wLs); });
-      el.addEventListener('mouseenter', () => setMainFocus('left', wLs));
-    }
-    panels.left[wLs] = el;
-    wrap.appendChild(el);
+    // Header row
+    const hdr = document.createElement('div'); hdr.className = 'wp-header';
+    const activeBadge = (isActive && w) ? `<span class="wp-active-badge">ACTIVE WEAPON</span>` : '';
+    hdr.innerHTML = `<span class="wp-header-num">[${wIdx + 1}]</span><span class="wp-header-name">${w ? (w.fullName || w.label) : `WEAPON SLOT ${wIdx + 1}`}</span>${activeBadge}`;
+    wrap.appendChild(hdr);
 
-    if (w) {
-      // Mod slots below the card
-      const modsRow = document.createElement('div'); modsRow.className = 'wp-mods';
-      modSlotEls[wIdx] = [];
-      MOD_SLOT_NAMES.forEach((sn, mIdx) => {
-        const mod  = weaponModSlots[wIdx][mIdx];
-        const slot = document.createElement('div');
-        slot.className = 'mod-slot' + (mod ? ' filled' : '');
-        slot.title = MOD_SLOT_FULL[mIdx];
-        slot.innerHTML = `${renderIcon(mod ? mod.type : 'mod', 16)}<span class="mod-slot-label">${sn}</span>`;
-        if (mod) {
-          const rmBtn = document.createElement('button'); rmBtn.className = 'mod-remove'; rmBtn.textContent = '×';
-          rmBtn.addEventListener('click', ev => { ev.stopPropagation(); weaponModSlots[wIdx][mIdx] = null; saveState(); renderAll(); });
-          slot.appendChild(rmBtn);
-        }
-        slot.addEventListener('click',      () => openModPicker(wIdx, mIdx, slot));
+    // Body: mods (left) + weapon card (right) — always rendered, inert when no weapon
+    const body = document.createElement('div'); body.className = 'wp-body';
+
+    // 2×2 mod grid — always visible; interactive only when weapon is equipped
+    const modsGrid = document.createElement('div'); modsGrid.className = 'wp-mods-grid';
+    modSlotEls[wIdx] = [];
+    MOD_SLOT_NAMES.forEach((sn, mIdx) => {
+      const mod  = w ? weaponModSlots[wIdx][mIdx] : null;
+      const slot = document.createElement('div');
+      slot.className = 'item-slot mod-card' + (mod ? ' ' + (mod.rarity || 'common') : ' empty') + (w ? '' : ' wp-inert');
+      slot.title = w ? MOD_SLOT_FULL[mIdx] : '';
+      if (mod) { slot.innerHTML = makeItemCardHTML(mod); }
+      else      { slot.innerHTML = `<span class="mod-card-label">${sn}</span>`; }
+      if (w) {
+        slot.addEventListener('click',      () => { setModFocus(wIdx, mIdx); if (!mod) openModPicker(wIdx, mIdx, slot); });
         slot.addEventListener('mouseenter', () => setModFocus(wIdx, mIdx));
-        modsRow.appendChild(slot);
         modSlotEls[wIdx][mIdx] = slot;
-      });
-      wrap.appendChild(modsRow);
+      }
+      modsGrid.appendChild(slot);
+    });
+    body.appendChild(modsGrid);
+
+    // Weapon card — interactive only when filled
+    const wpCard = document.createElement('div');
+    wpCard.className = 'item-slot wp-card' + (w ? ' ' + (w.rarity || 'common') : ' empty wp-inert');
+    if (w) {
+      wpCard.innerHTML = makeItemCardHTML(w);
+      wpCard.addEventListener('click',      () => { setMainFocus('left', wLs); handleCrossAction('left', wLs); });
+      wpCard.addEventListener('mouseenter', () => setMainFocus('left', wLs));
+      panels.left[wLs] = wpCard;
     } else {
-      modSlotEls[wIdx] = [];
+      wpCard.innerHTML = `<span class="wp-empty-label">+ WEAPON</span>`;
+      panels.left[wLs] = null; // skip in keyboard nav
     }
+    body.appendChild(wpCard);
+    wrap.appendChild(body);
+
+
     c.appendChild(wrap);
   });
 
@@ -423,14 +442,12 @@ function renderVault() {
   let totalVal = 0, totalCount = 0;
   crateMap.forEach(({ sec, si }, gi) => {
     const item = crateData[sec][si];
-    if (item) { totalVal += item.val; totalCount++; }
+    totalVal += item.val; totalCount++;
     const card = document.createElement('div');
-    card.className = 'item-slot vault-item' + (item ? ' ' + (item.rarity || 'common') : '') + (item ? '' : ' empty');
-    if (item) {
-      card.innerHTML = makeItemCardHTML(item) + (item.hasX ? '<button class="vc-x">×</button>' : '');
-      const xb = card.querySelector('.vc-x');
-      if (xb) xb.addEventListener('click', ev => { ev.stopPropagation(); crateData[sec][si] = null; saveState(); renderVault(); renderAllFocus(); });
-    }
+    card.className = 'item-slot vault-item ' + (item.rarity || 'common');
+    card.innerHTML = makeItemCardHTML(item) + (item.hasX ? '<button class="vc-x">×</button>' : '');
+    const xb = card.querySelector('.vc-x');
+    if (xb) xb.addEventListener('click', ev => { ev.stopPropagation(); crateData[sec][si] = null; saveState(); renderVault(); renderAllFocus(); });
     card.addEventListener('click',      () => { setMainFocus('crate', gi); handleCrossAction('crate', gi); });
     card.addEventListener('mouseenter', () => setMainFocus('crate', gi));
     g.appendChild(card);
@@ -459,6 +476,15 @@ function renderAll() { renderLeft(); renderBackpack(); renderVault(); renderAllF
 
 function setMainFocus(panel, idx) {
   focusMode = 'main'; focusPanel = panel; focusIdx = idx;
+  // Sync leftNavCol when focusing a left-panel gear or implant slot
+  if (panel === 'left') {
+    for (const entry of NAV_LEFT_SEQ) {
+      if (entry.slots) {
+        const ci = entry.slots.indexOf(idx);
+        if (ci !== -1) { leftNavCol = ci; break; }
+      }
+    }
+  }
   renderAllFocus();
 
   // Show compare panel when focusing backpack/vault item that conflicts with an equipped slot
@@ -483,6 +509,7 @@ function setMainFocus(panel, idx) {
 
 function setModFocus(wIdx, mIdx) {
   focusMode = 'mod'; modFocusWeapon = wIdx; modFocusSlot = mIdx;
+  leftNavCol = mIdx % 2; // 0 = BAR/GRI col, 1 = SCO/STO col
   closeCtxMenu();
   renderAllFocus();
   updateModFocusPanel();
@@ -568,13 +595,16 @@ function modToBackpack(wIdx, mIdx) {
 // ── LEFT PANEL NAVIGATION ───────────────────────────────
 
 function getLeftNavIdx() {
-  if (focusMode === 'mod') return modFocusWeapon === 0 ? 1 : 3;
+  if (focusMode === 'mod') {
+    const row = Math.floor(modFocusSlot / 2);
+    return modFocusWeapon * 2 + row; // W1: 0-1, W2: 2-3
+  }
   if (focusPanel !== 'left') return -1;
   const map = {
-    [LS.WEAPON1]:0, [LS.WEAPON2]:2,
-    [LS.EQUIP1]:4,
-    [LS.SHIELD]:5,  [LS.CORES]:5,  [LS.CORE2]:5,
-    [LS.IMPL1]:6,   [LS.IMPL2]:6,  [LS.IMPL3]:6,
+    [LS.WEAPON1]: 1, [LS.WEAPON2]: 3, // weapon cards = bottom row of their weapon
+    [LS.EQUIP1]:  4, [LS.SHIELD]:  4,
+    [LS.CORES]:   5, [LS.CORE2]:   5,
+    [LS.IMPL1]:   6, [LS.IMPL2]:   6, [LS.IMPL3]: 6,
   };
   return map[focusIdx] ?? -1;
 }
@@ -584,14 +614,14 @@ function navigateLeftDown() {
   let next = cur + 1;
   while (next < NAV_LEFT_SEQ.length) {
     const entry = NAV_LEFT_SEQ[next];
-    if (entry.type === 'mods') {
+    if (entry.type === 'mods-row') {
       const wLs = entry.weaponIdx === 0 ? LS.WEAPON1 : LS.WEAPON2;
       if (leftItems[wLs] && modSlotEls[entry.weaponIdx]?.length > 0) break;
       next++;
     } else break;
   }
   if (next >= NAV_LEFT_SEQ.length) return false;
-  applyLeftNavEntry(NAV_LEFT_SEQ[next], cur);
+  applyLeftNavEntry(NAV_LEFT_SEQ[next]);
   return true;
 }
 
@@ -600,25 +630,59 @@ function navigateLeftUp() {
   let prev = cur - 1;
   while (prev >= 0) {
     const entry = NAV_LEFT_SEQ[prev];
-    if (entry.type === 'mods') {
+    if (entry.type === 'mods-row') {
       const wLs = entry.weaponIdx === 0 ? LS.WEAPON1 : LS.WEAPON2;
       if (leftItems[wLs] && modSlotEls[entry.weaponIdx]?.length > 0) break;
       prev--;
     } else break;
   }
   if (prev < 0) return false;
-  applyLeftNavEntry(NAV_LEFT_SEQ[prev], cur);
+  applyLeftNavEntry(NAV_LEFT_SEQ[prev]);
   return true;
 }
 
 function applyLeftNavEntry(entry) {
-  if (entry.type === 'mods') {
-    const col = (focusMode === 'mod' && modFocusWeapon === entry.weaponIdx) ? modFocusSlot : 0;
-    setModFocus(entry.weaponIdx, col);
-  } else {
-    setMainFocus('left', entry.slotIdx);
-    panels['left']?.[entry.slotIdx]?.scrollIntoView({ block: 'nearest' });
+  if (entry.type === 'mods-row') {
+    const col = Math.min(leftNavCol, 1);
+    const slotIdx = entry.row * 2 + col; // row 0: 0(BAR) or 1(SCO); row 1: 2(GRI) or 3(STO)
+    setModFocus(entry.weaponIdx, slotIdx);
+  } else if (entry.type === 'gear-row' || entry.type === 'implants') {
+    const col = Math.min(leftNavCol, entry.slots.length - 1);
+    const slotLs = entry.slots[col];
+    setMainFocus('left', slotLs);
+    panels.left[slotLs]?.scrollIntoView({ block: 'nearest' });
   }
+}
+
+function navigateLeftHorizontal(dir) {
+  const cur = getLeftNavIdx(); if (cur === -1) return false;
+  const entry = NAV_LEFT_SEQ[cur];
+
+  // Weapon card: LEFT returns to mod grid col 1
+  if (focusIdx === LS.WEAPON1 || focusIdx === LS.WEAPON2) {
+    if (dir === 'left') {
+      const wIdx = focusIdx === LS.WEAPON1 ? 0 : 1;
+      if (modSlotEls[wIdx]?.length > 0) {
+        setModFocus(wIdx, 1 * 2 + 1); // STO slot (row 1, col 1)
+        leftNavCol = 1;
+        return true;
+      }
+    }
+    return false; // RIGHT from weapon card: fall through to cross-panel
+  }
+
+  if (entry.type === 'gear-row' || entry.type === 'implants') {
+    const slots = entry.slots;
+    const ci = slots.indexOf(focusIdx);
+    if (ci === -1) return false;
+    if (dir === 'right' && ci < slots.length - 1) {
+      leftNavCol = ci + 1; setMainFocus('left', slots[ci + 1]); return true;
+    }
+    if (dir === 'left' && ci > 0) {
+      leftNavCol = ci - 1; setMainFocus('left', slots[ci - 1]); return true;
+    }
+  }
+  return false;
 }
 
 // ── CROSS-PANEL NAVIGATION ──────────────────────────────
@@ -651,18 +715,28 @@ function crossTo(fromPanel, fromIdx, dir) {
 
 function navigate(dir) {
   if (focusMode === 'mod') {
-    const rowLen = (modSlotEls[modFocusWeapon] || []).length;
-    if (dir === 'right' && modFocusSlot < rowLen - 1) { setModFocus(modFocusWeapon, modFocusSlot + 1); return; }
-    if (dir === 'left'  && modFocusSlot > 0)           { setModFocus(modFocusWeapon, modFocusSlot - 1); return; }
-    if (dir === 'down')  { navigateLeftDown(); return; }
-    if (dir === 'up')    { navigateLeftUp();   return; }
-    if (dir === 'right') { const d = crossTo('left', modFocusWeapon === 0 ? LS.WEAPON1 : LS.WEAPON2, 'right'); if (d) setMainFocus(d.panel, d.idx); }
+    const col = modFocusSlot % 2;
+    const row = Math.floor(modFocusSlot / 2);
+    if (dir === 'right') {
+      if (col === 0) { setModFocus(modFocusWeapon, row * 2 + 1); return; }
+      // col 1: go to weapon card
+      const wLs = modFocusWeapon === 0 ? LS.WEAPON1 : LS.WEAPON2;
+      if (panels.left[wLs]) { leftNavCol = 2; setMainFocus('left', wLs); }
+      return;
+    }
+    if (dir === 'left') {
+      if (col === 1) { setModFocus(modFocusWeapon, row * 2); return; }
+      return; // col 0: leftmost, do nothing
+    }
+    if (dir === 'down') { navigateLeftDown(); return; }
+    if (dir === 'up')   { navigateLeftUp();   return; }
     return;
   }
 
   if (focusPanel === 'left') {
     if (dir === 'down' && navigateLeftDown()) return;
     if (dir === 'up'   && navigateLeftUp())   return;
+    if ((dir === 'right' || dir === 'left') && navigateLeftHorizontal(dir)) return;
   }
 
   const cols = COLS[focusPanel];
@@ -944,6 +1018,19 @@ function buildCtxActions(panel, idx, item) {
   const acts = [];
   const occupied = allSlotsOccupied(item);
   const hasSlots = !!compatibleSlots(item);
+
+  // Triangle actions — all items in all panels
+  acts.push({ icon: psKey('triangle'), label: 'Switch Equipped Weapon', exec: () => {
+    activeWeapon = activeWeapon === 0 ? 1 : 0;
+    renderAll();
+    const it = getItem(focusPanel, focusIdx);
+    if (it && (focusPanel === 'backpack' || focusPanel === 'crate')) {
+      const conflict = findConflictItem(it);
+      if (conflict) { showComparePanel(conflict, it, panels[focusPanel][focusIdx]); openCtxMenu(focusPanel, focusIdx, true); }
+    }
+    showToast('Active: Weapon ' + (activeWeapon + 1));
+  }});
+  acts.push({ icon: psKey('triangle', 'act-key', true), label: 'Inspect', exec: () => {} });
 
   if (panel === 'crate') {
     // Vault
