@@ -483,8 +483,10 @@ body {
   width: 36px; height: 36px; background: var(--bg-elevated);
   border: 1px solid var(--border-subtle); border-radius: 2px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative;
+  overflow: hidden;
 }
 .mod-item-icon svg { width: 20px; height: 20px; stroke: var(--text-secondary); fill: none; stroke-width: 1.5; }
+.mod-item-icon img { width: 26px; height: 26px; object-fit: contain; }
 .mod-item-icon::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 2px 2px 0 0;
 }

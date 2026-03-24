@@ -9,9 +9,9 @@
 const CR = '&#11041;'; // ⬡ hexagon currency symbol
 
 const STORAGE = {
-  LEFT:    'marathon_left_v2',
-  BACKPACK:'marathon_backpack',
-  CRATE:   'marathon_crate',
+  LEFT:    'marathon_left_v3',
+  BACKPACK:'marathon_backpack_v2',
+  CRATE:   'marathon_crate_v2',
   MODS:    'marathon_mods',
 };
 
@@ -160,7 +160,7 @@ function psKey(type, wrapClass = 'act-key', isLong = false) {
 function makeDefaultLeft() {
   const arr = new Array(9).fill(null);
   arr[LS.WEAPON1] = { id:'overrun_ar',  label:'OVERRUN AR',   val:614,  fullName:'OVERRUN ASSAULT RIFLE',    desc:'Modular AR with high adaptability for mid-range engagements.', stats:[{n:'Damage',v:58,pct:58},{n:'Fire Rate',v:62,pct:62},{n:'Range',v:70,pct:70}], type:'weapon',     rarity:'rare' };
-  arr[LS.EQUIP1]  = { id:'equip_hook',  label:'GRAPPLE',      val:80,   fullName:'GRAPPLE HOOK',             desc:'Lets you grapple to surfaces rapidly.',                         stats:[{n:'Range',v:80,pct:80},{n:'Cooldown',v:40,pct:40}],                         type:'equip',      rarity:'uncommon' };
+  arr[LS.EQUIP1]  = { id:'frag_a',      label:'FRAG',         val:120,  fullName:'FRAG GRENADE',             desc:'Fragmentation explosive. Deals high area damage.',              stats:[{n:'Blast',v:75,pct:75},{n:'Fuse',v:30,pct:30},{n:'Radius',v:60,pct:60}],   type:'grenade',    rarity:'uncommon' };
   arr[LS.SHIELD]  = { id:'shield_std',  label:'SHIELD',       val:120,  fullName:'STANDARD SHIELD',          desc:'Absorbs incoming damage.',                                      stats:[{n:'Capacity',v:100,pct:100},{n:'Regen',v:20,pct:20}],                       type:'shield',     rarity:'uncommon' };
   arr[LS.CORES]   = { id:'core1',       label:'CORE',         val:80,   fullName:'COMBAT CORE',              desc:'Enhances core stats.',                                          stats:[{n:'Boost',v:60,pct:60}],                                                    type:'core',       rarity:'rare' };
   return arr;
@@ -202,10 +202,15 @@ function makeDefaultCrate() {
       null, null,
     ],
     red: [
-      { id:'med_a', label:'MED PACK',    val:550,  fullName:'ADVANCED MED PACK',       desc:'Restores full HP over 6s.',         stats:[{n:'Heal',v:100,pct:100},{n:'Cast',v:60,pct:60}],             rarity:'uncommon', type:'medkit' },
-      { id:'med_b', label:'STIM SHOT',   val:550,  fullName:'ENHANCED STIM',           desc:'Amplified combat stim.',            stats:[{n:'Duration',v:66,pct:66},{n:'Boost',v:90,pct:90}],          rarity:'uncommon', type:'consumable' },
-      { id:'med_c', label:'SKULL HELM',  val:100,  fullName:'SKULL HELMET V2',         desc:'Mid-tier head protection.',         stats:[{n:'Armor',v:55,pct:55},{n:'Weight',v:40,pct:40}],            rarity:'common',   type:'equip' },
-      { id:'med_d', label:'TAC HELM',    val:100,  fullName:'TACTICAL HELMET',         desc:'Standard tactical headgear.',       stats:[{n:'Armor',v:45,pct:45},{n:'Weight',v:30,pct:30}],            rarity:'common',   type:'equip' },
+      { id:'med_a', label:'MED PACK',    val:550,  fullName:'ADVANCED MED PACK',       desc:'Restores full HP over 6s.',         stats:[{n:'Heal',v:100,pct:100},{n:'Cast',v:60,pct:60}],                               rarity:'uncommon', type:'medkit' },
+      { id:'med_b', label:'STIM SHOT',   val:550,  fullName:'ENHANCED STIM',           desc:'Amplified combat stim.',            stats:[{n:'Duration',v:66,pct:66},{n:'Boost',v:90,pct:90}],                            rarity:'uncommon', type:'consumable' },
+      { id:'gren_a', label:'FRAG',       val:120,  fullName:'FRAG GRENADE',            desc:'Fragmentation explosive. High area damage.',      stats:[{n:'Blast',v:75,pct:75},{n:'Fuse',v:30,pct:30},{n:'Radius',v:60,pct:60}],     rarity:'uncommon', type:'grenade' },
+      { id:'gren_b', label:'INCEN',      val:280,  fullName:'INCENDIARY GRENADE',      desc:'Ignites an area on impact.',        stats:[{n:'Burn',v:80,pct:80},{n:'Duration',v:50,pct:50},{n:'Radius',v:45,pct:45}],   rarity:'rare',     type:'grenade' },
+      { id:'gren_c', label:'CRYO',       val:480,  fullName:'CRYO GRENADE',            desc:'Flash-freezes targets in range.',   stats:[{n:'Slow',v:95,pct:95},{n:'Duration',v:40,pct:40},{n:'Radius',v:55,pct:55}],   rarity:'rare',     type:'grenade' },
+      { id:'gren_d', label:'VORTEX',     val:1800, fullName:'VORTEX GRENADE',          desc:'Pulls enemies into a singularity.', stats:[{n:'Pull',v:100,pct:100},{n:'Duration',v:35,pct:35},{n:'Radius',v:70,pct:70}], rarity:'epic',     type:'grenade' },
+      { id:'sh_rare_a', label:'SHIELD',  val:420,  fullName:'REINFORCED SHIELD',       desc:'Heavy-duty shield with rapid regen.',              stats:[{n:'Capacity',v:160,pct:80},{n:'Regen',v:55,pct:55},{n:'Delay',v:30,pct:30}], rarity:'rare',     type:'shield' },
+      { id:'sh_rare_b', label:'SHIELD',  val:380,  fullName:'ADAPTIVE SHIELD',         desc:'Adjusts resistance to incoming damage type.',      stats:[{n:'Capacity',v:140,pct:70},{n:'Regen',v:60,pct:60},{n:'Adapt',v:75,pct:75}], rarity:'rare',     type:'shield' },
+      { id:'sh_epic_a', label:'SHIELD',  val:1600, fullName:'OVERCHARGE SHIELD',       desc:'Overcharges beyond base capacity on kills.',       stats:[{n:'Capacity',v:200,pct:100},{n:'Regen',v:80,pct:80},{n:'Surge',v:90,pct:90}],rarity:'epic',     type:'shield' },
     ],
   };
 }
@@ -782,11 +787,12 @@ function handleCrossAction(panel, idx) {
 
 function findEmptyCompatibleSlot(item) {
   const typeMap = {
-    weapon: [LS.WEAPON1, LS.WEAPON2],
-    equip:  [LS.EQUIP1],
-    shield: [LS.SHIELD],
-    core:   [LS.CORES, LS.CORE2],
-    implant:[LS.IMPL1, LS.IMPL2, LS.IMPL3],
+    weapon:  [LS.WEAPON1, LS.WEAPON2],
+    equip:   [LS.EQUIP1],
+    grenade: [LS.EQUIP1],
+    shield:  [LS.SHIELD],
+    core:    [LS.CORES, LS.CORE2],
+    implant: [LS.IMPL1, LS.IMPL2, LS.IMPL3],
   };
   const candidates = typeMap[item.type || ''] || Object.values(LS);
   for (const si of candidates) { if (leftItems[si] === null) return si; }
@@ -800,11 +806,12 @@ function moveToBP(fromPanel, fromIdx) {
 
 function compatibleSlots(item) {
   const typeMap = {
-    weapon: [LS.WEAPON1, LS.WEAPON2],
-    equip:  [LS.EQUIP1],
-    shield: [LS.SHIELD],
-    core:   [LS.CORES, LS.CORE2],
-    implant:[LS.IMPL1, LS.IMPL2, LS.IMPL3],
+    weapon:  [LS.WEAPON1, LS.WEAPON2],
+    equip:   [LS.EQUIP1],
+    grenade: [LS.EQUIP1],
+    shield:  [LS.SHIELD],
+    core:    [LS.CORES, LS.CORE2],
+    implant: [LS.IMPL1, LS.IMPL2, LS.IMPL3],
   };
   return typeMap[item.type || ''] || null;
 }
@@ -847,7 +854,7 @@ function moveToVault(panel, idx) {
     if (si !== -1) { arr[si] = item; setRaw(panel, idx, null); saveState(); renderAll(); return; }
   }
   // Overflow: append to appropriate section
-  const secMap = { weapon:'green', tactical:'blue', ammo:'grey', consumable:'red', medkit:'red', shield:'red', equip:'red', core:'red', implant:'red' };
+  const secMap = { weapon:'green', tactical:'blue', ammo:'grey', consumable:'red', medkit:'red', grenade:'red', shield:'red', equip:'red', core:'red', implant:'red' };
   crateData[secMap[item.type || 'grey'] || 'grey'].push(item);
   setRaw(panel, idx, null); saveState(); renderAll();
 }
@@ -941,6 +948,7 @@ function findConflictItem(item) {
   const typeMap = {
     weapon:  activeWeapon === 0 ? [LS.WEAPON1, LS.WEAPON2] : [LS.WEAPON2, LS.WEAPON1],
     equip:   [LS.EQUIP1],
+    grenade: [LS.EQUIP1],
     shield:  [LS.SHIELD],
     core:    [LS.CORES, LS.CORE2],
     implant: [LS.IMPL1, LS.IMPL2, LS.IMPL3],
