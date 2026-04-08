@@ -561,6 +561,25 @@ body {
 .act-label { flex: 1; font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--text-primary); }
 .act-val   { font-family: var(--font-mono); font-size: 11px; color: var(--accent-green); }
 
+/* ── DRAG AND DROP ──────────────────────────────────────── */
+.item-slot.dragging { opacity: 0.35; outline: 1px dashed var(--accent-green); }
+.item-slot.drag-over { outline: 2px solid var(--accent-green); background: rgba(181,255,46,.08); }
+
+/* Keyboard / mouse key badges (mouse input mode) */
+.kb-key-wrap { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.kb-key {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 20px; padding: 0 5px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.2);
+  border-bottom: 2px solid rgba(255,255,255,.1);
+  border-radius: 3px; font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-primary); letter-spacing: .03em; line-height: 1;
+}
+.kb-hold {
+  font-family: var(--font-mono); font-size: 8px; color: var(--text-muted);
+  letter-spacing: .06em; text-transform: uppercase;
+}
+
 /* ── COMPARE PANEL ──────────────────────────────────────── */
 #compare-panel {
   position: fixed; z-index: 190; width: 310px;
@@ -635,8 +654,11 @@ body {
   background: rgba(10,11,13,.9); border: 1px solid var(--border-subtle); border-radius: 2px;
   padding: 4px 12px; font-family: var(--font-mono); font-size: 9px; color: var(--text-muted);
   pointer-events: none; display: flex; gap: 12px; letter-spacing: .08em;
+  opacity: 0; transition: opacity 0.2s;
 }
 #nav-hint b { color: var(--accent-green); }
+body.controller-mode #nav-hint { opacity: 1; }
+body.controller-mode { cursor: none; }
 
 #lp-ring { position: fixed; pointer-events: none; z-index: 300; display: none; }
 #lp-ring svg { transform: rotate(-90deg); }

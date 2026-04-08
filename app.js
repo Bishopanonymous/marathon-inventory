@@ -149,7 +149,18 @@ const PS_ICON_NAMES = {
   circle:   'outline-red-circle',
 };
 
+const KB_MAP = {
+  triangle: 'V',
+  cross:    'LMB',
+  square:   'F',
+  circle:   'RMB',
+};
 function psKey(type, wrapClass = 'act-key', isLong = false) {
+  if (inputMode === 'mouse' && KB_MAP[type]) {
+    const label = KB_MAP[type];
+    const prefix = isLong ? '<span class="kb-hold">hold</span>' : '';
+    return `<span class="${wrapClass} kb-key-wrap">${prefix}<span class="kb-key">${label}</span></span>`;
+  }
   const base = PS_ICON_NAMES[type] ?? `outline-${type}`;
   const src  = `assets/icons/${base}${isLong ? '-LongPress' : ''}.svg`;
   return `<span class="${wrapClass}"><img src="${src}" class="ps-btn-img" alt="${type}${isLong ? ' long-press' : ''}" /></span>`;
@@ -298,10 +309,26 @@ let focusPanel   = 'backpack', focusIdx = 0;
 let modFocusWeapon = 0, modFocusSlot = 0;
 let leftNavCol = 0; // column position within left-panel nav rows
 
+// ── INPUT MODE ───────────────────────────────────────────
+let inputMode = 'mouse'; // 'mouse' | 'controller'
+function setInputMode(mode) {
+  if (inputMode === mode) return;
+  inputMode = mode;
+  document.body.classList.toggle('controller-mode', mode === 'controller');
+  // Refresh open panels so key labels update
+  if (focusMode === 'mod') updateModFocusPanel();
+  if (ctxOpen && _ctxPanel !== null) {
+    const item = getItem(_ctxPanel, _ctxIdx);
+    if (item) { _ctxActions = buildCtxActions(_ctxPanel, _ctxIdx, item); renderCtxActions(); }
+  }
+}
+document.addEventListener('mousemove', () => setInputMode('mouse'));
+
 let panels    = { left:[], backpack:[], crate:[] };
 let modSlotEls = [[], []];
 let activeWeapon = 0;
-let ctxOpen = false, ctxActionIdx = 0, _ctxActions = [];
+let ctxOpen = false, ctxActionIdx = 0, _ctxActions = [], _ctxPanel = null, _ctxIdx = null;
+const kbHold = { f: null, v: null };
 let swapPickerOpen = false, swapPickerFrom = null;
 let modPickerOpen = false, modPickerWeaponIdx = 0, modPickerSlotIdx = 0, modPickerItems = [], modPickerFocusIdx = 0;
 let ctxTimer = null;
@@ -339,7 +366,7 @@ function renderLeft() {
       else      { slot.innerHTML = `<span class="mod-card-label">${sn}</span>`; }
       if (w) {
         slot.addEventListener('click',      () => { setModFocus(wIdx, mIdx); if (!mod) openModPicker(wIdx, mIdx, slot); });
-        slot.addEventListener('mouseenter', () => setModFocus(wIdx, mIdx));
+        slot.addEventListener('mouseenter', () => { if (inputMode !== 'mouse') return; setModFocus(wIdx, mIdx); });
         modSlotEls[wIdx][mIdx] = slot;
       }
       modsGrid.appendChild(slot);
@@ -352,10 +379,13 @@ function renderLeft() {
     if (w) {
       wpCard.innerHTML = makeItemCardHTML(w);
       wpCard.addEventListener('click',      () => { setMainFocus('left', wLs); handleCrossAction('left', wLs); });
-      wpCard.addEventListener('mouseenter', () => setMainFocus('left', wLs));
+      wpCard.addEventListener('mouseenter', () => { if (inputMode !== 'mouse') return; setMainFocus('left', wLs); });
+      applyDrag(wpCard, 'left', wLs);
+      applyDropTarget(wpCard, 'left', wLs);
       panels.left[wLs] = wpCard;
     } else {
       wpCard.innerHTML = `<span class="wp-empty-label">+ WEAPON</span>`;
+      applyDropTarget(wpCard, 'left', wLs);
       panels.left[wLs] = null; // skip in keyboard nav
     }
     body.appendChild(wpCard);
@@ -414,7 +444,9 @@ function makeLeftSlot(si, extraClass = '') {
     el.innerHTML = makeItemCardHTML(item);
   }
   el.addEventListener('click',      () => { setMainFocus('left', si); handleCrossAction('left', si); });
-  el.addEventListener('mouseenter', () => setMainFocus('left', si));
+  el.addEventListener('mouseenter', () => { if (inputMode !== 'mouse') return; setMainFocus('left', si); });
+  if (item) applyDrag(el, 'left', si);
+  applyDropTarget(el, 'left', si);
   panels.left[si] = el;
   return el;
 }
@@ -431,7 +463,9 @@ function renderBackpack() {
       cell.innerHTML = makeItemCardHTML(item);
     }
     cell.addEventListener('click',      () => { setMainFocus('backpack', i); handleCrossAction('backpack', i); });
-    cell.addEventListener('mouseenter', () => setMainFocus('backpack', i));
+    cell.addEventListener('mouseenter', () => { if (inputMode !== 'mouse') return; setMainFocus('backpack', i); });
+    if (item) applyDrag(cell, 'backpack', i);
+    applyDropTarget(cell, 'backpack', i);
     g.appendChild(cell);
     panels.backpack.push(cell);
   });
@@ -454,7 +488,8 @@ function renderVault() {
     const xb = card.querySelector('.vc-x');
     if (xb) xb.addEventListener('click', ev => { ev.stopPropagation(); crateData[sec][si] = null; saveState(); renderVault(); renderAllFocus(); });
     card.addEventListener('click',      () => { setMainFocus('crate', gi); handleCrossAction('crate', gi); });
-    card.addEventListener('mouseenter', () => setMainFocus('crate', gi));
+    card.addEventListener('mouseenter', () => { if (inputMode !== 'mouse') return; setMainFocus('crate', gi); });
+    applyDrag(card, 'crate', gi);
     g.appendChild(card);
     panels.crate.push(card);
   });
@@ -914,7 +949,7 @@ function makeModRow(m) {
     </div>
     <span class="mod-item-val">${CR}${m.item.val}</span>`;
   row.addEventListener('click',      () => installMod(m));
-  row.addEventListener('mouseenter', () => { modPickerFocusIdx = modPickerItems.indexOf(m); renderModPickerFocus(); });
+  row.addEventListener('mouseenter', () => { if (inputMode !== 'mouse') return; modPickerFocusIdx = modPickerItems.indexOf(m); renderModPickerFocus(); });
   return row;
 }
 
@@ -1047,7 +1082,7 @@ function buildCtxActions(panel, idx, item) {
         acts.push({ icon: psKey('cross'), label: 'Equip', exec: () => { doEquip(panel, idx); closeCtxMenu(); } });
       } else {
         acts.push({ icon: psKey('cross'), label: 'Move to Backpack', exec: () => { moveToBP(panel, idx); renderAll(); closeCtxMenu(); } });
-        acts.push({ icon: psKey('cross', 'act-key', true), label: 'Swap', exec: () => { doSwap(panel, idx); closeCtxMenu(); } });
+        acts.push({ icon: psKey('cross', 'act-key', true), label: 'Swap', noMouse: true, exec: () => { doSwap(panel, idx); closeCtxMenu(); } });
       }
     }
     // No Move to Vault (already in vault)
@@ -1075,8 +1110,24 @@ function buildCtxActions(panel, idx, item) {
   return acts;
 }
 
+function renderCtxActions() {
+  const actEl = document.getElementById('ctx-actions');
+  const visible = _ctxActions.filter(a => !(a.noMouse && inputMode === 'mouse'));
+  actEl.innerHTML = visible.map((a) => `
+    <div class="ctx-action">
+      <div style="flex-shrink:0">${a.icon}</div>
+      <div class="act-label">${a.label}</div>
+      ${a.val ? `<div class="act-val">${a.val}</div>` : ''}
+    </div>`).join('');
+  actEl.querySelectorAll('.ctx-action').forEach((el, i) => {
+    el.addEventListener('click',      () => visible[i].exec());
+    el.addEventListener('mouseenter', () => { if (inputMode !== 'mouse') return; ctxActionIdx = i; renderCtxFocus(); });
+  });
+}
+
 function openCtxMenu(panel, idx, auto = false) {
   const item = getItem(panel, idx); if (!item) return;
+  _ctxPanel = panel; _ctxIdx = idx;
   const rc   = RARITY_COLORS[item.rarity || 'common'];
   document.getElementById('ctx-rarity-bar').style.background = rc;
   document.getElementById('ctx-icon').innerHTML = renderIcon(item.type, 22);
@@ -1095,17 +1146,7 @@ function openCtxMenu(panel, idx, auto = false) {
     </div>`).join('');
 
   _ctxActions = buildCtxActions(panel, idx, item);
-  const actEl = document.getElementById('ctx-actions');
-  actEl.innerHTML = _ctxActions.map((a) => `
-    <div class="ctx-action">
-      <div style="flex-shrink:0">${a.icon}</div>
-      <div class="act-label">${a.label}</div>
-      ${a.val ? `<div class="act-val">${a.val}</div>` : ''}
-    </div>`).join('');
-  actEl.querySelectorAll('.ctx-action').forEach((el, i) => {
-    el.addEventListener('click',      () => _ctxActions[i].exec());
-    el.addEventListener('mouseenter', () => { ctxActionIdx = i; renderCtxFocus(); });
-  });
+  renderCtxActions();
 
   const menu = document.getElementById('ctx-menu');
   menu.style.display = 'block';
@@ -1188,9 +1229,78 @@ function execSwapPicker(slotIdx) {
 document.getElementById('swap-opt-0').addEventListener('click', () => execSwapPicker(0));
 document.getElementById('swap-opt-1').addEventListener('click', () => execSwapPicker(1));
 
+// ── DRAG AND DROP ───────────────────────────────────────
+
+let dragSrc = null; // { panel, idx }
+
+function applyDrag(el, panel, idx) {
+  el.draggable = true;
+  el.addEventListener('dragstart', e => {
+    const item = getItem(panel, idx); if (!item) { e.preventDefault(); return; }
+    dragSrc = { panel, idx };
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => el.classList.add('dragging'), 0);
+    setInputMode('mouse');
+  });
+  el.addEventListener('dragend', () => {
+    el.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(t => t.classList.remove('drag-over'));
+    dragSrc = null;
+  });
+  el.addEventListener('dragover', e => {
+    if (!dragSrc) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    el.classList.add('drag-over');
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    el.classList.remove('drag-over');
+    if (!dragSrc || (dragSrc.panel === panel && dragSrc.idx === idx)) return;
+    executeDrop(dragSrc.panel, dragSrc.idx, panel, idx);
+  });
+}
+
+function applyDropTarget(el, panel, idx) {
+  el.addEventListener('dragover', e => {
+    if (!dragSrc) return;
+    const item = getItem(dragSrc.panel, dragSrc.idx); if (!item) return;
+    if (panel === 'left') {
+      const compat = compatibleSlots(item);
+      if (!compat || !compat.includes(idx)) return;
+    }
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    el.classList.add('drag-over');
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    el.classList.remove('drag-over');
+    if (!dragSrc || (dragSrc.panel === panel && dragSrc.idx === idx)) return;
+    executeDrop(dragSrc.panel, dragSrc.idx, panel, idx);
+  });
+}
+
+function executeDrop(fromPanel, fromIdx, toPanel, toIdx) {
+  const fromItem = getItem(fromPanel, fromIdx); if (!fromItem) return;
+  if (toPanel === 'left') {
+    const compat = compatibleSlots(fromItem);
+    if (!compat || !compat.includes(toIdx)) return;
+    const toItem = leftItems[toIdx];
+    leftItems[toIdx] = fromItem;
+    setRaw(fromPanel, fromIdx, toItem);
+  } else {
+    const toItem = getItem(toPanel, toIdx);
+    setRaw(fromPanel, fromIdx, toItem);
+    setRaw(toPanel, toIdx, fromItem);
+  }
+  saveState(); renderAll();
+}
+
 // ── KEYBOARD ────────────────────────────────────────────
 
 document.addEventListener('keydown', e => {
+  setInputMode('controller');
   if (modPickerOpen) {
     const n = modPickerItems.length;
     if (e.key === 'ArrowDown') { e.preventDefault(); modPickerFocusIdx = (modPickerFocusIdx + 1) % n; renderModPickerFocus(); }
@@ -1233,9 +1343,31 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
       if (focusMode === 'mod') modToBackpack(modFocusWeapon, modFocusSlot);
       break;
+    case 'v': case 'V':
+      e.preventDefault();
+      activeWeapon = activeWeapon === 0 ? 1 : 0; renderAll(); showToast('Active: Weapon ' + (activeWeapon + 1));
+      break;
+    case 'f': case 'F':
+      e.preventDefault();
+      if (focusMode === 'mod') { modToBackpack(modFocusWeapon, modFocusSlot); break; }
+      if (!e.repeat) {
+        kbHold.f = setTimeout(() => {
+          kbHold.f = null;
+          const it = getItem(focusPanel, focusIdx); if (!it) return;
+          doRemove(focusPanel, focusIdx); showToast('Sold ' + CR + it.val);
+        }, 500);
+      }
+      break;
     case 'Escape':
       closeCtxMenu(); hideModFocusPanel(); hideComparePanel();
       break;
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if ((e.key === 'f' || e.key === 'F') && kbHold.f) {
+    clearTimeout(kbHold.f); kbHold.f = null;
+    if (focusMode !== 'mod') { moveToVault(focusPanel, focusIdx); showToast('Moved to vault'); }
   }
 });
 
@@ -1300,6 +1432,7 @@ function gpLoop() {
 }
 
 function gpPress(btn) {
+  setInputMode('controller');
   if (modPickerOpen) {
     const n = modPickerItems.length;
     if (btn === GP.DPAD_DOWN) { modPickerFocusIdx = (modPickerFocusIdx + 1) % n; renderModPickerFocus(); }
