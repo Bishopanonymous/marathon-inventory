@@ -328,7 +328,7 @@ let panels    = { left:[], backpack:[], crate:[] };
 let modSlotEls = [[], []];
 let activeWeapon = 0;
 let ctxOpen = false, ctxActionIdx = 0, _ctxActions = [], _ctxPanel = null, _ctxIdx = null;
-const kbHold = { f: null, v: null };
+const kbHold = { f: null, v: null, x: null };
 let swapPickerOpen = false, swapPickerFrom = null;
 let modPickerOpen = false, modPickerWeaponIdx = 0, modPickerSlotIdx = 0, modPickerItems = [], modPickerFocusIdx = 0;
 let ctxTimer = null;
@@ -804,13 +804,20 @@ function navigate(dir) {
 
 function handleCrossAction(panel, idx) {
   const item = getItem(panel, idx); if (!item) return;
+
+  // Tactical: tap X = move to backpack (install is long-press X)
+  if (item.type === 'tactical') {
+    if (panel === 'crate') { moveToBP(panel, idx); renderAll(); }
+    else if (panel === 'left') { moveToBP(panel, idx); renderAll(); }
+    // backpack: no tap action — install is long-press only
+    return;
+  }
+
   if (panel === 'crate') {
-    // Vault: X = Equip if empty slot, else move to backpack
     const slot = findEmptyCompatibleSlot(item);
     if (slot !== null) moveItem(panel, idx, 'left', slot);
     else moveToBP(panel, idx);
   } else if (panel === 'backpack') {
-    // Backpack: X = Equip if empty slot, else Swap
     const slot = findEmptyCompatibleSlot(item);
     if (slot !== null) moveItem(panel, idx, 'left', slot);
     else doSwap(panel, idx); return;
@@ -829,7 +836,7 @@ function findEmptyCompatibleSlot(item) {
     core:    [LS.CORES, LS.CORE2],
     implant: [LS.IMPL1, LS.IMPL2, LS.IMPL3],
   };
-  const candidates = typeMap[item.type || ''] || Object.values(LS);
+  const candidates = typeMap[item.type || ''] || [];
   for (const si of candidates) { if (leftItems[si] === null) return si; }
   return null;
 }
@@ -1055,6 +1062,22 @@ function hideComparePanel() {
   document.getElementById('compare-panel').classList.add('hidden');
 }
 
+function hasOpenModSlot() {
+  const w = leftItems[activeWeapon === 0 ? LS.WEAPON1 : LS.WEAPON2];
+  if (!w) return false;
+  return weaponModSlots[activeWeapon].some(s => s === null);
+}
+
+function installModDirect(item, fromPanel, fromIdx) {
+  let slotIdx = weaponModSlots[activeWeapon].indexOf(null);
+  // If no open slot, swap with slot 0 — displaced mod returns to source
+  if (slotIdx === -1) slotIdx = 0;
+  const displaced = weaponModSlots[activeWeapon][slotIdx];
+  weaponModSlots[activeWeapon][slotIdx] = item;
+  setRaw(fromPanel, fromIdx, displaced ?? null);
+  saveState(); renderAll();
+}
+
 // ── CONTEXT MENU ────────────────────────────────────────
 
 function buildCtxActions(panel, idx, item) {
@@ -1084,8 +1107,13 @@ function buildCtxActions(panel, idx, item) {
         acts.push({ icon: psKey('cross'), label: 'Move to Backpack', exec: () => { moveToBP(panel, idx); renderAll(); closeCtxMenu(); } });
         acts.push({ icon: psKey('cross', 'act-key', true), label: 'Swap', noMouse: true, exec: () => { doSwap(panel, idx); closeCtxMenu(); } });
       }
+    } else {
+      // Non-equippable (tactical, ammo, etc.) — tap X = move to backpack
+      acts.push({ icon: psKey('cross'), label: 'Move to Backpack', exec: () => { moveToBP(panel, idx); renderAll(); closeCtxMenu(); } });
     }
-    // No Move to Vault (already in vault)
+    if (item.type === 'tactical' && leftItems[activeWeapon === 0 ? LS.WEAPON1 : LS.WEAPON2]) {
+      acts.push({ icon: psKey('cross', 'act-key', true), label: 'Install Mod', exec: () => { installModDirect(item, panel, idx); closeCtxMenu(); } });
+    }
     acts.push({ icon: psKey('square', 'act-key', true), label: 'Sell', val: `+${CR}${item.val}`, exec: () => { doRemove(panel, idx); closeCtxMenu(); } });
 
   } else if (panel === 'backpack') {
@@ -1096,6 +1124,9 @@ function buildCtxActions(panel, idx, item) {
       } else {
         acts.push({ icon: psKey('cross'), label: 'Swap', exec: () => { doSwap(panel, idx); closeCtxMenu(); } });
       }
+    }
+    if (item.type === 'tactical' && leftItems[activeWeapon === 0 ? LS.WEAPON1 : LS.WEAPON2]) {
+      acts.push({ icon: psKey('cross', 'act-key', true), label: 'Install Mod', exec: () => { installModDirect(item, panel, idx); closeCtxMenu(); } });
     }
     acts.push({ icon: psKey('square'), label: 'Move to Vault', exec: () => { moveToVault(panel, idx); closeCtxMenu(); } });
     acts.push({ icon: psKey('square', 'act-key', true), label: 'Sell', val: `+${CR}${item.val}`, exec: () => { doRemove(panel, idx); closeCtxMenu(); } });
@@ -1337,7 +1368,18 @@ document.addEventListener('keydown', e => {
         if (!weaponModSlots[modFocusWeapon][modFocusSlot]) {
           const el = modSlotEls[modFocusWeapon]?.[modFocusSlot]; if (el) openModPicker(modFocusWeapon, modFocusSlot, el);
         }
-      } else { const it = getItem(focusPanel, focusIdx); if (it) openCtxMenu(focusPanel, focusIdx, false); }
+      } else {
+        const it = getItem(focusPanel, focusIdx); if (!it) break;
+        if (it.type === 'tactical' && !e.repeat && !kbHold.x) {
+          kbHold.x = setTimeout(() => {
+            kbHold.x = null;
+            const w = leftItems[activeWeapon === 0 ? LS.WEAPON1 : LS.WEAPON2];
+            if (w) { installModDirect(it, focusPanel, focusIdx); showToast('Mod installed'); }
+          }, 500);
+        } else if (it.type !== 'tactical') {
+          openCtxMenu(focusPanel, focusIdx, false);
+        }
+      }
       break;
     case 'q': case 'Q':
       e.preventDefault();
@@ -1368,6 +1410,12 @@ document.addEventListener('keyup', e => {
   if ((e.key === 'f' || e.key === 'F') && kbHold.f) {
     clearTimeout(kbHold.f); kbHold.f = null;
     if (focusMode !== 'mod') { moveToVault(focusPanel, focusIdx); showToast('Moved to vault'); }
+  }
+  if ((e.key === 'x' || e.key === 'X') && kbHold.x) {
+    clearTimeout(kbHold.x); kbHold.x = null;
+    // Short tap X on tactical = open ctx menu (install is hold)
+    const it = getItem(focusPanel, focusIdx);
+    if (it && it.type === 'tactical') openCtxMenu(focusPanel, focusIdx, false);
   }
 });
 
@@ -1483,8 +1531,13 @@ function gpLongPress(btn) {
     return;
   }
   const item = getItem(focusPanel, focusIdx); if (!item) return;
-  if (btn === GP.CROSS)  {
-    if (allSlotsOccupied(item)) { doSwap(focusPanel, focusIdx); showToast('Swapped'); }
+  if (btn === GP.CROSS) {
+    if (item.type === 'tactical') {
+      const w = leftItems[activeWeapon === 0 ? LS.WEAPON1 : LS.WEAPON2];
+      if (w) { installModDirect(item, focusPanel, focusIdx); showToast('Mod installed'); }
+    } else if (allSlotsOccupied(item)) {
+      doSwap(focusPanel, focusIdx); showToast('Swapped');
+    }
   }
   if (btn === GP.SQUARE) { doRemove(focusPanel, focusIdx); showToast('Sold ' + CR + item.val); }
 }
